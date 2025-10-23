@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Code in HTML</title>
+    <!-- Highlight.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <!-- Highlight.js Script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        pre code { background-color: #f4f4f4; border: 1px solid #ddd; padding: 20px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Python Code Displayed in HTML</h1>
+    <p>Below is the provided Python code formatted for display on a web page with syntax highlighting via Highlight.js.</p>
+    <pre><code class="language-python">import ipywidgets as widgets
+from IPython.display import display, HTML, Image, clear_output
+import json
+import os
+import hashlib
+import datetime
+import requests
+import random
+import urllib.parse
+import time
+import uuid
+import base64
+
+# User management class with role and template support
+class UserManager:
+    USER_DB_FILE = &quot;user_database.json&quot;
+    TEMPLATE_DB_FILE = &quot;templates.json&quot;
+    MASTER_USERNAME = &quot;master123&quot;
+    DEFAULT_MASTER_PASSWORD = &quot;master@123&quot;
+
+    def __init__(self):
+        self.users = {}
+        self.templates = {}
+        self.current_user = None
+        self.current_role = None
+        self.load_users()
+        self.load_templates()
+        self.create_master_user()
+
+    def load_users(self):
+        &quot;&quot;&quot;Load user database from file&quot;&quot;&quot;
+        if os.path.exists(self.USER_DB_FILE):
+            try:
+                with open(self.USER_DB_FILE, &#39;r&#39;) as f:
+                    self.users = json.load(f)
+            except:
+                self.users = {}
+
+    def save_users(self):
+        &quot;&quot;&quot;Save user database to file&quot;&quot;&quot;
+        with open(self.USER_DB_FILE, &#39;w&#39;) as f:
+            json.dump(self.users, f)
+
+    def load_templates(self):
+        &quot;&quot;&quot;Load template database from file&quot;&quot;&quot;
+        if os.path.exists(self.TEMPLATE_DB_FILE):
+            try:
+                with open(self.TEMPLATE_DB_FILE, &#39;r&#39;) as f:
+                    self.templates = json.load(f)
+            except:
+                self.templates = {}
+
+    def save_templates(self):
+        &quot;&quot;&quot;Save template database to file&quot;&quot;&quot;
+        with open(self.TEMPLATE_DB_FILE, &#39;w&#39;) as f:
+            json.dump(self.templates, f)
+
+    def create_master_user(self):
+        &quot;&quot;&quot;Create master user if not exists&quot;&quot;&quot;
+        if self.MASTER_USERNAME not in self.users:
+            salt = os.urandom(16)
+            hashed_pw = hashlib.pbkdf2_hmac(
+                &#39;sha256&#39;,
+                self.DEFAULT_MASTER_PASSWORD.encode(),
+                salt,
+                100000
+            )
+            self.users[self.MASTER_USERNAME] = {
+                &quot;password&quot;: hashed_pw.hex(),
+                &quot;salt&quot;: salt.hex(),
+                &quot;industry_code&quot;: &quot;ADMIN-001&quot;,
+                &quot;role&quot;: &quot;master&quot;,
+                &quot;created_at&quot;: datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;),
+                &quot;template_id&quot;: None
+            }
+            self.save_users()
+
+    def create_user(self, username, password, industry_code, template_id=None):
+        &quot;&quot;&quot;Create a new user account with role and optional template assignment&quot;&quot;&quot;
+        if username in self.users:
+            return False, &quot;Username already exists&quot;
+
+        role = &quot;master&quot; if username == self.MASTER_USERNAME else &quot;client&quot;
+
+        # Validate template_id if provided
+        if template_id and template_id not in self.templates:
+            return False, &quot;Invalid template ID&quot;
+
+        # Hash password
+        salt = os.urandom(16)
+        hashed_pw = hashlib.pbkdf2_hmac(&#39;sha256&#39;, password.encode(), salt, 100000)
+
+        # Store user with template
+        self.users[username] = {
+            &quot;password&quot;: hashed_pw.hex(),
+            &quot;salt&quot;: salt.hex(),
+            &quot;industry_code&quot;: industry_code,
+            &quot;role&quot;: role,
+            &quot;created_at&quot;: datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;),
+            &quot;template_id&quot;: template_id
+        }
+        self.save_users()
+        return True, f&quot;Account created successfully. Role: {role}&quot;
+
+    def authenticate(self, username, password):
+        &quot;&quot;&quot;Authenticate a user and set role&quot;&quot;&quot;
+        if username not in self.users:
+            return False, &quot;User not found&quot;
+
+        user = self.users[username]
+        salt = bytes.fromhex(user[&#39;salt&#39;])
+        hashed_pw = hashlib.pbkdf2_hmac(&#39;sha256&#39;, password.encode(), salt, 100000)
+
+        if hashed_pw.hex() != user[&#39;password&#39;]:
+            return False, &quot;Invalid password&quot;
+
+        self.current_user = username
+        self.current_role = user[&#39;role&#39;]
+        return True, f&quot;Login successful. Role: {user[&#39;role&#39;]}&quot;
+
+    def logout(self):
+        &quot;&quot;&quot;Log out current user&quot;&quot;&quot;
+        self.current_user = None
+        self.current_role = None
+        return &quot;You have been logged out&quot;
+
+    def create_template(self, template_name, industry_code, content, creator):
+        &quot;&quot;&quot;Create a new template (master only)&quot;&quot;&quot;
+        if creator != self.MASTER_USERNAME or self.current_role != &quot;master&quot;:
+            return False, &quot;Only master users can create templates&quot;
+
+        template_id = str(uuid.uuid4())
+        self.templates[template_id] = {
+            &quot;name&quot;: template_name,
+            &quot;industry_code&quot;: industry_code,
+            &quot;content&quot;: content,
+            &quot;created_at&quot;: datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+        }
+        self.save_templates()
+        return True, f&quot;Template &#39;{template_name}&#39; created with ID: {template_id}&quot;
+
+    def delete_template(self, template_id, user):
+        &quot;&quot;&quot;Delete a template (master only)&quot;&quot;&quot;
+        if user != self.MASTER_USERNAME or self.current_role != &quot;master&quot;:
+            return False, &quot;Only master users can delete templates&quot;
+
+        if template_id not in self.templates:
+            return False, &quot;Template not found&quot;
+
+        # Prevent deletion if template is assigned to users
+        for user_data in self.users.values():
+            if user_data.get(&quot;template_id&quot;) == template_id:
+                return False, &quot;Template is assigned to users and cannot be deleted&quot;
+
+        del self.templates[template_id]
+        self.save_templates()
+        return True, f&quot;Template {template_id} deleted successfully&quot;
+
+    def get_templates_by_industry(self, industry_code):
+        &quot;&quot;&quot;Get templates matching an industry code&quot;&quot;&quot;
+        return {tid: t for tid, t in self.templates.items() if t[&#39;industry_code&#39;] == industry_code}
+
+# Image generation functions
+def generate_two_images(subject, style=&quot;professional photography&quot;):
+    &quot;&quot;&quot;
+    Generates two image variations based on a subject name
+    &quot;&quot;&quot;
+    base_prompt = f&quot;A photorealistic 1024x1024 image of {subject}, {style}, high quality, 8k&quot;
+    images = []
+    for i in range(2):
+        variation_prompt = f&quot;{base_prompt}, variation {i+1}, unique composition&quot;
+        img_bytes, _ = get_pollinations_image(variation_prompt)
+        images.append(img_bytes)
+        time.sleep(1)
+    return images
+
+def get_pollinations_image(prompt, width=1024, height=1024):
+    &quot;&quot;&quot;
+    Generate image using Pollinations AI API
+    &quot;&quot;&quot;
+    try:
+        seed = random.randint(0, 1000000)
+        encoded_prompt = urllib.parse.quote(prompt)
+        api_url = f&quot;https://image.pollinations.ai/prompt/{encoded_prompt}?seed={seed}&amp;width={width}&amp;height={height}&quot;
+        response = requests.get(api_url, timeout=60)
+        response.raise_for_status()
+        return response.content, seed
+    except Exception as e:
+        print(f&quot;Image generation failed: {str(e)}&quot;)
+        return None, str(e)
+
+# Authentication and Image Generation UI with feedback system
+form_style = {&#39;description_width&#39;: &#39;150px&#39;}
+input_width = &#39;90%&#39;
+
+class AuthImageSystem:
+    def __init__(self):
+        self.user_manager = UserManager()
+        self.create_widgets()
+        # State for image feedback system
+        self.current_images = []
+        self.current_subject = &quot;&quot;
+        self.current_style = &quot;&quot;
+        self.regeneration_count = 0
+        self.MAX_REGENERATIONS = 20
+
+    def create_widgets(self):
+        # Sign Up Widgets
+        self.signup_username = widgets.Text(
+            description=&quot;Username:&quot;, style=form_style, layout=widgets.Layout(width=input_width))
+        self.signup_password = widgets.Password(
+            description=&quot;Password:&quot;, style=form_style, layout=widgets.Layout(width=input_width))
+        self.industry_code = widgets.Text(
+            description=&quot;Industry Code:&quot;, style=form_style, layout=widgets.Layout(width=input_width),
+            placeholder=&quot;Enter your industry code (e.g., TECH-123)&quot;)
+        self.template_dropdown = widgets.Dropdown(
+            description=&quot;Template:&quot;, style=form_style, layout=widgets.Layout(width=input_width),
+            options=[(&quot;None&quot;, None)], disabled=True)
+        self.signup_btn = widgets.Button(
+            description=&quot;Create Account&quot;, button_style=&#39;primary&#39;, layout=widgets.Layout(width=&#39;200px&#39;))
+        self.signup_status = widgets.Output()
+
+        # Login Widgets
+        self.login_username = widgets.Text(
+            description=&quot;Username:&quot;, style=form_style, layout=widgets.Layout(width=input_width))
+        self.login_password = widgets.Password(
+            description=&quot;Password:&quot;, style=form_style, layout=widgets.Layout(width=input_width))
+        self.login_btn = widgets.Button(
+            description=&quot;Login&quot;, button_style=&#39;primary&#39;, layout=widgets.Layout(width=&#39;200px&#39;))
+        self.login_status = widgets.Output()
+
+        # Template Management Widgets
+        self.template_name = widgets.Text(
+            description=&quot;Template Name:&quot;, style=form_style, layout=widgets.Layout(width=input_width))
+        self.template_industry_code = widgets.Text(
+            description=&quot;Industry Code:&quot;, style=form_style, layout=widgets.Layout(width=input_width))
+        self.template_content = widgets.Text(
+            description=&quot;Content:&quot;, style=form_style, layout=widgets.Layout(width=input_width),
+            placeholder=&quot;e.g., professional photography, Japanese cuisine&quot;)
+        self.create_template_btn = widgets.Button(
+            description=&quot;Create Template&quot;, button_style=&#39;primary&#39;, layout=widgets.Layout(width=&#39;200px&#39;))
+        self.delete_template_dropdown = widgets.Dropdown(
+            description=&quot;Delete Template:&quot;, style=form_style, layout=widgets.Layout(width=input_width),
+            options=[(&quot;Select a template&quot;, None)])
+        self.delete_template_btn = widgets.Button(
+            description=&quot;Delete Template&quot;, button_style=&#39;danger&#39;, layout=widgets.Layout(width=&#39;200px&#39;))
+        self.template_status = widgets.Output()
+
+        # Image Generation Widgets
+        self.image_subject = widgets.Text(
+            description=&quot;Subject:&quot;, style=form_style, layout=widgets.Layout(width=input_width),
+            placeholder=&quot;e.g., Spicy Tuna Roll, Mystery Novel, Smart Watch&quot;)
+        self.image_style = widgets.Text(
+            description=&quot;Style:&quot;, style=form_style, layout=widgets.Layout(width=input_width),
+            value=&quot;professional photography&quot;)
+        self.generate_btn = widgets.Button(
+            description=&quot;Generate Images&quot;, button_style=&#39;primary&#39;, layout=widgets.Layout(width=&#39;200px&#39;))
+        self.image_output = widgets.Output()
+        
+        # Feedback Widgets
+        self.like_this_btn = widgets.Button(
+            description=&quot;I like this&quot;, 
+            button_style=&#39;success&#39;,
+            tooltip=&quot;Download first image&quot;,
+            layout=widgets.Layout(width=&#39;120px&#39;)
+        )
+        self.like_that_btn = widgets.Button(
+            description=&quot;I like that&quot;, 
+            button_style=&#39;success&#39;,
+            tooltip=&quot;Download second image&quot;,
+            layout=widgets.Layout(width=&#39;120px&#39;)
+        )
+        self.both_bad_btn = widgets.Button(
+            description=&quot;Both bad&quot;, 
+            button_style=&#39;danger&#39;,
+            tooltip=&quot;Regenerate new images&quot;,
+            layout=widgets.Layout(width=&#39;120px&#39;)
+        )
+        self.feedback_status = widgets.Output()
+        
+        # Logout Widget
+        self.logout_btn = widgets.Button(
+            description=&quot;Logout&quot;, 
+            button_style=&#39;warning&#39;, 
+            icon=&#39;sign-out&#39;,
+            layout=widgets.Layout(width=&#39;100px&#39;, margin=&#39;20px 0 0 auto&#39;)
+        )
+
+        # Attach handlers
+        self.signup_btn.on_click(self.on_signup)
+        self.login_btn.on_click(self.on_login)
+        self.create_template_btn.on_click(self.on_create_template)
+        self.delete_template_btn.on_click(self.on_delete_template)
+        self.generate_btn.on_click(self.on_generate)
+        self.logout_btn.on_click(self.on_logout)
+        self.industry_code.observe(self.update_template_dropdown, names=&#39;value&#39;)
+        self.like_this_btn.on_click(self.on_like_this)
+        self.like_that_btn.on_click(self.on_like_that)
+        self.both_bad_btn.on_click(self.on_both_bad)
+
+    def update_template_dropdown(self, change):
+        &quot;&quot;&quot;Update template dropdown based on industry code&quot;&quot;&quot;
+        industry_code = change[&#39;new&#39;].strip()
+        templates = self.user_manager.get_templates_by_industry(industry_code)
+        options = [(&quot;None&quot;, None)] + [(t[&#39;name&#39;], tid) for tid, t in templates.items()]
+        self.template_dropdown.options = options
+        self.template_dropdown.disabled = not bool(templates)
+
+    def on_signup(self, btn):
+        username = self.signup_username.value.strip()
+        password = self.signup_password.value.strip()
+        industry_code = self.industry_code.value.strip()
+        template_id = self.template_dropdown.value
+
+        if not username or not password:
+            with self.signup_status:
+                self.signup_status.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Username and password are required!&lt;/div&gt;&quot;))
+            return
+
+        if not industry_code:
+            with self.signup_status:
+                self.signup_status.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Industry code is required!&lt;/div&gt;&quot;))
+            return
+
+        success, message = self.user_manager.create_user(username, password, industry_code, template_id)
+        with self.signup_status:
+            self.signup_status.clear_output()
+            color = &quot;green&quot; if success else &quot;red&quot;
+            display(HTML(f&quot;&lt;div style=&#39;color:{color};padding:10px&#39;&gt;{message}&lt;/div&gt;&quot;))
+
+    def on_login(self, btn):
+        username = self.login_username.value.strip()
+        password = self.login_password.value.strip()
+
+        if not username or not password:
+            with self.login_status:
+                self.login_status.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Username and password required!&lt;/div&gt;&quot;))
+            return
+
+        success, message = self.user_manager.authenticate(username, password)
+        with self.login_status:
+            self.login_status.clear_output()
+            color = &quot;green&quot; if success else &quot;red&quot;
+            display(HTML(f&quot;&lt;div style=&#39;color:{color};padding:10px&#39;&gt;{message}&lt;/div&gt;&quot;))
+
+        if success:
+            clear_output(wait=True)
+            display(HTML(f&quot;&lt;div style=&#39;color:green;padding:10px&#39;&gt;{message}&lt;/div&gt;&quot;))
+            time.sleep(3)
+            clear_output(wait=True)
+            display(self.show_post_login_ui())
+
+    def on_logout(self, btn):
+        &quot;&quot;&quot;Handle logout action&quot;&quot;&quot;
+        message = self.user_manager.logout()
+        clear_output(wait=True)
+        display(HTML(f&quot;&lt;div style=&#39;color:blue;padding:10px&#39;&gt;{message}&lt;/div&gt;&quot;))
+        time.sleep(2)
+        clear_output(wait=True)
+        self.show_auth_ui()
+
+    def on_create_template(self, btn):
+        if self.user_manager.current_role != &quot;master&quot;:
+            with self.template_status:
+                self.template_status.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Only master users can create templates!&lt;/div&gt;&quot;))
+            return
+
+        template_name = self.template_name.value.strip()
+        industry_code = self.template_industry_code.value.strip()
+        content = self.template_content.value.strip()
+
+        if not all([template_name, industry_code, content]):
+            with self.template_status:
+                self.template_status.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;All template fields are required!&lt;/div&gt;&quot;))
+            return
+
+        success, message = self.user_manager.create_template(
+            template_name, industry_code, content, self.user_manager.current_user)
+        with self.template_status:
+            self.template_status.clear_output()
+            color = &quot;green&quot; if success else &quot;red&quot;
+            display(HTML(f&quot;&lt;div style=&#39;color:{color};padding:10px&#39;&gt;{message}&lt;/div&gt;&quot;))
+        self.update_template_delete_dropdown()
+
+    def on_delete_template(self, btn):
+        if self.user_manager.current_role != &quot;master&quot;:
+            with self.template_status:
+                self.template_status.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Only master users can delete templates!&lt;/div&gt;&quot;))
+            return
+
+        template_id = self.delete_template_dropdown.value
+        if not template_id:
+            with self.template_status:
+                self.template_status.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Select a template to delete!&lt;/div&gt;&quot;))
+            return
+
+        success, message = self.user_manager.delete_template(template_id, self.user_manager.current_user)
+        with self.template_status:
+            self.template_status.clear_output()
+            color = &quot;green&quot; if success else &quot;red&quot;
+            display(HTML(f&quot;&lt;div style=&#39;color:{color};padding:10px&#39;&gt;{message}&lt;/div&gt;&quot;))
+        self.update_template_delete_dropdown()
+
+    def on_generate(self, btn):
+        subject = self.image_subject.value.strip()
+        style = self.image_style.value.strip()
+
+        if not subject:
+            with self.image_output:
+                self.image_output.clear_output()
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Subject is required!&lt;/div&gt;&quot;))
+            return
+
+        # Reset regeneration counter for new subject
+        self.regeneration_count = 0
+        self.current_subject = subject
+        self.current_style = style
+        
+        with self.image_output:
+            self.image_output.clear_output()
+            display(HTML(&quot;&lt;div style=&#39;color:blue;padding:10px&#39;&gt;Generating images, please wait...&lt;/div&gt;&quot;))
+        
+        self.generate_and_display_images()
+
+    def generate_and_display_images(self):
+        &quot;&quot;&quot;Generate and display images with feedback options&quot;&quot;&quot;
+        images = generate_two_images(self.current_subject, self.current_style)
+        self.current_images = images  # Store for download
+        
+        with self.image_output:
+            self.image_output.clear_output()
+            
+            if not any(images):
+                display(HTML(&quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;Failed to generate images.&lt;/div&gt;&quot;))
+                return
+                
+            for i, img_bytes in enumerate(images):
+                if img_bytes:
+                    display(HTML(f&quot;&lt;h3&gt;Image {i+1}&lt;/h3&gt;&quot;))
+                    display(Image(img_bytes))
+            
+            # Display feedback buttons
+            buttons_box = widgets.HBox([
+                self.like_this_btn, 
+                self.like_that_btn, 
+                self.both_bad_btn
+            ])
+            display(buttons_box)
+            
+            # Show regeneration count if applicable
+            if self.regeneration_count &gt; 0:
+                display(HTML(
+                    f&quot;&lt;div style=&#39;color:blue;padding:10px&#39;&gt;&quot;
+                    f&quot;Regeneration attempt: {self.regeneration_count}/{self.MAX_REGENERATIONS}&quot;
+                    f&quot;&lt;/div&gt;&quot;
+                ))
+
+    def download_image(self, img_bytes, filename):
+        &quot;&quot;&quot;Create download link for an image&quot;&quot;&quot;
+        b64 = base64.b64encode(img_bytes).decode()
+        html = f&#39;&#39;&#39;
+        &lt;a download=&quot;{filename}&quot; href=&quot;data:image/png;base64,{b64}&quot; target=&quot;_blank&quot;&gt;
+            Click to download {filename}
+        &lt;/a&gt;
+        &#39;&#39;&#39;
+        return html
+
+    def on_like_this(self, btn):
+        &quot;&quot;&quot;Handle &#39;I like this&#39; button click - download first image&quot;&quot;&quot;
+        if len(self.current_images) &gt; 0 and self.current_images[0]:
+            filename = f&quot;{self.current_subject.replace(&#39; &#39;, &#39;_&#39;})_1.png&quot;
+            html = self.download_image(self.current_images[0], filename)
+            with self.feedback_status:
+                self.feedback_status.clear_output()
+                display(HTML(f&quot;&lt;div style=&#39;color:green;padding:10px&#39;&gt;{html}&lt;/div&gt;&quot;))
+
+    def on_like_that(self, btn):
+        &quot;&quot;&quot;Handle &#39;I like that&#39; button click - download second image&quot;&quot;&quot;
+        if len(self.current_images) &gt; 1 and self.current_images[1]:
+            filename = f&quot;{self.current_subject.replace(&#39; &#39;, &#39;_&#39;})_2.png&quot;
+            html = self.download_image(self.current_images[1], filename)
+            with self.feedback_status:
+                self.feedback_status.clear_output()
+                display(HTML(f&quot;&lt;div style=&#39;color:green;padding:10px&#39;&gt;{html}&lt;/div&gt;&quot;))
+
+    def on_both_bad(self, btn):
+        &quot;&quot;&quot;Handle &#39;Both bad&#39; button click - regenerate images&quot;&quot;&quot;
+        self.regeneration_count += 1
+        
+        if self.regeneration_count &gt;= self.MAX_REGENERATIONS:
+            with self.image_output:
+                self.image_output.clear_output()
+                display(HTML(
+                    &quot;&lt;div style=&#39;color:red;padding:10px&#39;&gt;&quot;
+                    &quot;Maximum regenerations reached. Please try a different subject.&quot;
+                    &quot;&lt;/div&gt;&quot;
+                ))
+            return
+            
+        with self.image_output:
+            self.image_output.clear_output()
+            display(HTML(
+                f&quot;&lt;div style=&#39;color:blue;padding:10px&#39;&gt;&quot;
+                f&quot;Regenerating images (attempt {self.regeneration_count}/{self.MAX_REGENERATIONS})...&quot;
+                f&quot;&lt;/div&gt;&quot;
+            ))
+        
+        self.generate_and_display_images()
+
+    def show_signup_form(self):
+        return widgets.VBox([
+            widgets.HTML(&quot;&lt;h2 style=&#39;color:#2E86e1; margin-top:0&#39;&gt;📝 Sign Up&lt;/h2&gt;&quot;),
+            widgets.HTML(&quot;&lt;p&gt;Create a new account with your industry code&lt;/p&gt;&quot;),
+            self.signup_username,
+            self.signup_password,
+            self.industry_code,
+            self.template_dropdown,
+            widgets.HTML(&quot;&lt;div style=&#39;font-size:12px; color:#666; margin-top:-10px&#39;&gt;&quot;
+                         &quot;Enter your industry-specific code for future features&lt;/div&gt;&quot;),
+            self.signup_btn,
+            self.signup_status
+        ])
+
+    def show_login_form(self):
+        return widgets.VBox([
+            widgets.HTML(&quot;&lt;h2 style=&#39;color:#2E86e1; margin-top:0&#39;&gt;🔒 Login&lt;/h2&gt;&quot;),
+            widgets.HTML(&quot;&lt;p&gt;Access your existing account&lt;/p&gt;&quot;),
+            self.login_username,
+            self.login_password,
+            self.login_btn,
+            self.login_status
+        ])
+
+    def show_template_management_form(self):
+        self.update_template_delete_dropdown()
+        return widgets.VBox([
+            widgets.HTML(&quot;&lt;h2 style=&#39;color:#2E86e1; margin-top:0&#39;&gt;🛠️ Template Management&lt;/h2&gt;&quot;),
+            widgets.HTML(&quot;&lt;p&gt;Create or delete industry-specific templates (Master only)&lt;/p&gt;&quot;),
+            self.template_name,
+            self.template_industry_code,
+            self.template_content,
+            self.create_template_btn,
+            self.delete_template_dropdown,
+            self.delete_template_btn,
+            self.template_status
+        ])
+
+    def show_image_gen_form(self):
+        # Pre-populate style if user has an assigned template
+        template_id = self.user_manager.users.get(self.user_manager.current_user, {}).get(&quot;template_id&quot;)
+        if template_id and template_id in self.user_manager.templates:
+            self.image_style.value = self.user_manager.templates[template_id][&quot;content&quot;]
+        return widgets.VBox([
+            widgets.HTML(&quot;&lt;h2 style=&#39;color:#2E86e1; margin-top:0&#39;&gt;🖼️ Image Generator&lt;/h2&gt;&quot;),
+            widgets.HTML(&quot;&lt;p&gt;Enter a subject and style to generate two images&lt;/p&gt;&quot;),
+            self.image_subject,
+            self.image_style,
+            self.generate_btn,
+            self.image_output,
+            self.feedback_status  # Added feedback status area
+        ])
+
+    def update_template_delete_dropdown(self):
+        &quot;&quot;&quot;Update the delete template dropdown with current templates&quot;&quot;&quot;
+        options = [(&quot;Select a template&quot;, None)] + [
+            (f&quot;{t[&#39;name&#39;]} ({t[&#39;industry_code&#39;]})&quot;, tid) for tid, t in self.user_manager.templates.items()
+        ]
+        self.delete_template_dropdown.options = options
+
+    def show_post_login_ui(self):
+        &quot;&quot;&quot;Show appropriate UI based on user role with logout button&quot;&quot;&quot;
+        # Create header with logout button
+        header = widgets.HBox([
+            widgets.HTML(f&quot;&lt;h2 style=&#39;margin:0; flex-grow:1&#39;&gt;Logged in as: {self.user_manager.current_user} &quot;
+                         f&quot;({self.user_manager.current_role})&lt;/h2&gt;&quot;),
+            self.logout_btn
+        ])
+        
+        if self.user_manager.current_role == &quot;master&quot;:
+            tabs = widgets.Tab()
+            tabs.children = [self.show_image_gen_form(), self.show_template_management_form()]
+            tabs.titles = [&#39;Image Generator&#39;, &#39;Template Management&#39;]
+            return widgets.VBox([header, tabs])
+        else:
+            return widgets.VBox([header, self.show_image_gen_form()])
+
+    def show_auth_ui(self):
+        &quot;&quot;&quot;Display authentication UI with signup and login tabs&quot;&quot;&quot;
+        auth_tabs = widgets.Tab()
+        auth_tabs.children = [self.show_signup_form(), self.show_login_form()]
+        auth_tabs.titles = [&#39;Sign Up&#39;, &#39;Login&#39;]
+        display(auth_tabs)
+
+# Create instance and display UI
+auth_image_system = AuthImageSystem()
+auth_image_system.show_auth_ui()</code></pre>
+    <p>Save this as an .html file and open it in a browser to view the formatted code.</p>
+</body>
+</html>
